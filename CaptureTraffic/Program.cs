@@ -12,6 +12,7 @@ using System.Threading;
 using Fiddler;
 using Telerik.NetworkConnections;
 using BCCertMaker;
+using System.Web;
 
 namespace CaptureTraffic
 {
@@ -56,11 +57,16 @@ namespace CaptureTraffic
             {
                // Console.WriteLine(session.id);
                // Console.WriteLine("------------------------------------------------------------------------------");
-                if(session.fullUrl.Contains("search?"))
+                if(session.fullUrl.Contains("search?") && !session.fullUrl.Contains("/complete/"))
                 {
+                    string searchTerm = GetSearchTerm(session.fullUrl);
                     Console.WriteLine("------------------------------------------------------------------------------");
-                    Console.WriteLine("Search term: " + GetSearchTerm(session.fullUrl));
-                    Console.WriteLine("------------------------------------------------------------------------------"); 
+                    Console.WriteLine("Search term: " + searchTerm);
+                    
+                    SentimentAnalyzer sentimentAnalyzer = new SentimentAnalyzer();
+                    string sentiment = SentimentAnalyzer.SyncSentimentAnalyze(searchTerm);
+                    Console.WriteLine("Sentiment: " + sentiment);
+                    Console.WriteLine("------------------------------------------------------------------------------");
                 }
                // Console.WriteLine("------------------------------------------------------------------------------");
                 // In order to enable response tampering, buffering mode MUST
@@ -157,7 +163,7 @@ namespace CaptureTraffic
                 if(param.StartsWith("q="))
                 {
                     string filteredParam = String.Concat(param.Skip(2));
-                    filteredParam = filteredParam.Replace("+", " ").Replace("%20", " ");
+                    filteredParam = HttpUtility.UrlDecode(filteredParam);
                     return filteredParam;
                 }
             }
