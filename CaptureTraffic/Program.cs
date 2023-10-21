@@ -13,6 +13,7 @@ using Fiddler;
 using Telerik.NetworkConnections;
 using BCCertMaker;
 using System.Web;
+using System.Xml.Serialization;
 
 namespace CaptureTraffic
 {
@@ -22,12 +23,14 @@ namespace CaptureTraffic
         private const ushort fiddlerCoreListenPort = 0;
 
         private static readonly ICollection<Session> sessions = new List<Session>();
+        private static AlertCollection alerts = new AlertCollection();
         private static readonly ReaderWriterLockSlim sessionsLock = new ReaderWriterLockSlim();
 
         private static readonly string assemblyDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
 
         private static void Main()
         {
+            DeserializeAlertList();
             AttachEventListeners();
 
             EnsureRootCertificate();
@@ -37,6 +40,18 @@ namespace CaptureTraffic
             ExecuteUserCommands();
 
             Quit();
+        }
+
+        private static void DeserializeAlertList()
+        {
+            var file = File.Open("C:\\Guardian\\alertList.xml", FileMode.OpenOrCreate);
+            XmlSerializer xmlSerializer = new XmlSerializer(typeof(AlertCollection));
+            try
+            {
+                alerts = (AlertCollection)xmlSerializer.Deserialize(file);
+            }
+            catch (Exception) { }
+            file.Close();
         }
 
         private static void AttachEventListeners()
@@ -55,20 +70,21 @@ namespace CaptureTraffic
 
             FiddlerApplication.BeforeRequest += session =>
             {
-               // Console.WriteLine(session.id);
-               // Console.WriteLine("------------------------------------------------------------------------------");
-                if(session.fullUrl.Contains("search?") && !session.fullUrl.Contains("/complete/"))
+                // Console.WriteLine(session.id);
+                // Console.WriteLine("------------------------------------------------------------------------------");
+                if (session.fullUrl.Contains("search?") && !session.fullUrl.Contains("/complete/"))
                 {
                     string searchTerm = GetSearchTerm(session.fullUrl);
                     Console.WriteLine("------------------------------------------------------------------------------");
                     Console.WriteLine("Search term: " + searchTerm);
-                    
+
                     SentimentAnalyzer sentimentAnalyzer = new SentimentAnalyzer();
                     string sentiment = SentimentAnalyzer.SyncSentimentAnalyze(searchTerm);
                     Console.WriteLine("Sentiment: " + sentiment);
                     Console.WriteLine("------------------------------------------------------------------------------");
+                    WriteAlert(sentiment);
                 }
-               // Console.WriteLine("------------------------------------------------------------------------------");
+                // Console.WriteLine("------------------------------------------------------------------------------");
                 // In order to enable response tampering, buffering mode MUST
                 // be enabled; this allows FiddlerCore to permit modification of
                 // the response in the BeforeResponse handler rather than streaming
@@ -111,9 +127,10 @@ namespace CaptureTraffic
             }
             */
 
-            
-            Fiddler.FiddlerApplication.BeforeResponse += session => {
-                 //Console.WriteLine($"{session.id}:HTTP {session.responseCode} for {session.fullUrl}");
+
+            Fiddler.FiddlerApplication.BeforeResponse += session =>
+            {
+                //Console.WriteLine($"{session.id}:HTTP {session.responseCode} for {session.fullUrl}");
 
                 // Uncomment the following two statements to decompress/unchunk the
                 // HTTP response and subsequently modify any HTTP responses to replace 
@@ -121,7 +138,7 @@ namespace CaptureTraffic
                 // set session.bBufferResponse = true inside the BeforeRequest event handler above.
                 //
                 session.utilDecodeResponse();
-                
+
             };
 
             FiddlerApplication.AfterSessionComplete += session =>
@@ -158,9 +175,9 @@ namespace CaptureTraffic
         private static string GetSearchTerm(string fullUrl)
         {
             string[] reqParams = fullUrl.Split(new char[] { '?', '&' });
-            foreach(string param in reqParams)
+            foreach (string param in reqParams)
             {
-                if(param.StartsWith("q="))
+                if (param.StartsWith("q="))
                 {
                     string filteredParam = String.Concat(param.Skip(2));
                     filteredParam = HttpUtility.UrlDecode(filteredParam);
@@ -238,6 +255,18 @@ namespace CaptureTraffic
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine(s);
             Console.ForegroundColor = oldColor;
+        }
+
+        private static void WriteAlert(string sentiment)
+        {
+            var file = File.Create("C:\\Guardian\\alertList.xml");
+            AlertRecord record = new AlertRecord();
+            record.alertTime = DateTime.Now;
+            record.alertText = sentiment;
+            alerts.AlertRecords.Add(record);
+            XmlSerializer xmlSerializer = new XmlSerializer(typeof(AlertCollection));
+            xmlSerializer.Serialize(file, alerts);
+            file.Close();
         }
     }
 }
