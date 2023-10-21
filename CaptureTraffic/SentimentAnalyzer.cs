@@ -27,13 +27,7 @@ namespace CaptureTraffic
                     var serializedResponse = ResponseSerializer.FromJson(await response.Content.ReadAsStringAsync());
                     output = serializedResponse.Results[0].GeneratedText;
                     
-                    Console.WriteLine("Output: ");
-                    Console.WriteLine(output);
-                    if (response.IsSuccessStatusCode)
-                    {
-
-                    }
-                    else
+                    if (!response.IsSuccessStatusCode)
                     {
                         Console.WriteLine($"Request failed with status code: {response.StatusCode}");
                     }
