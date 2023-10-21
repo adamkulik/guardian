@@ -16,7 +16,8 @@ namespace CaptureTraffic
 
                 httpClient.DefaultRequestHeaders.Add("Authorization", "Bearer YOUR_TOKEN");
 
-                var input = "{\r\n  \"model_id\": \"google/flan-t5-xxl\",\r\n  \"input\": \"Classify this search term as a depressed, suicidal, neutral, panic attack.\\nSearch term:\\n" + searchTerm + "\\n\\nClassification:\\n\",\r\n  \"parameters\": {\r\n    \"decoding_method\": \"greedy\",\r\n    \"max_new_tokens\": 30,\r\n    \"min_new_tokens\": 0,\r\n    \"stop_sequences\": [],\r\n    \"repetition_penalty\": 1\r\n  },\r\n  \"project_id\": \"5d78d326-f680-493f-a45b-f880186106ac\"\r\n}";
+                var input = "{\r\n  \"model_id\": \"google/flan-t5-xxl\",\r\n  \"input\": \"Classify this search term as a depression, mental exhaustion, fears, problem with learning, loneliness, problem with peers, " +
+                    "suicidal, bullying, cyberbullying, abuse, addictions, panic attack, attention deficit, neutral.\\nSearch term:\\n" + searchTerm + "\\n\\nClassification:\\n\",\r\n  \"parameters\": {\r\n    \"decoding_method\": \"greedy\",\r\n    \"max_new_tokens\": 30,\r\n    \"min_new_tokens\": 0,\r\n    \"stop_sequences\": [],\r\n    \"repetition_penalty\": 1\r\n  },\r\n  \"project_id\": \"5d78d326-f680-493f-a45b-f880186106ac\"\r\n}";
                 HttpContent httpContent = new StringContent(input, Encoding.UTF8, "application/json");
                 httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Content-Type", "application/json; charset=utf-8");
 
