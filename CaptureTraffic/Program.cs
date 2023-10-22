@@ -14,6 +14,7 @@ using Telerik.NetworkConnections;
 using BCCertMaker;
 using System.Web;
 using System.Xml.Serialization;
+using HtmlAgilityPack;
 
 namespace CaptureTraffic
 {
@@ -25,7 +26,7 @@ namespace CaptureTraffic
         private static readonly ICollection<Session> sessions = new List<Session>();
         private static AlertCollection alerts = new AlertCollection();
         private static readonly ReaderWriterLockSlim sessionsLock = new ReaderWriterLockSlim();
-
+        public static List<int> flaggedSessionIds = new List<int>();
         private static readonly string assemblyDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
 
         private static void Main()
@@ -83,13 +84,15 @@ namespace CaptureTraffic
                     Console.WriteLine("Sentiment: " + sentiment);
                     Console.WriteLine("------------------------------------------------------------------------------");
                     WriteAlert(sentiment);
+                    if(sentiment != "neutral") flaggedSessionIds.Add(session.id);
                 }
                 // Console.WriteLine("------------------------------------------------------------------------------");
                 // In order to enable response tampering, buffering mode MUST
                 // be enabled; this allows FiddlerCore to permit modification of
                 // the response in the BeforeResponse handler rather than streaming
                 // the response to the client as the response comes in.
-                session.bBufferResponse = false;
+                session.oRequest["Accept-Encoding"] = "gzip, deflate";
+                session.bBufferResponse = true;
 
                 // Set this property if you want FiddlerCore to automatically authenticate by
                 // answering Digest/Negotiate/NTLM/Kerberos challenges itself
@@ -138,6 +141,29 @@ namespace CaptureTraffic
                 // set session.bBufferResponse = true inside the BeforeRequest event handler above.
                 //
                 session.utilDecodeResponse();
+                if (flaggedSessionIds.Contains(session.id))
+                {
+                    session.utilDecodeResponse();
+                    string nonce = "8IBTHwOdqNKAWeKl7plt8g==";
+                    var header = session.ResponseHeaders.Where(x => x.Name.Contains("Content-Security-Policy")).FirstOrDefault();
+                    if (header != null)
+                    {
+                        int scriptSrcPos = header.Value.IndexOf("nonce-");
+                        nonce = String.Concat(header.Value.Skip(scriptSrcPos + 6));
+                        int apostrophePos = nonce.IndexOf('\'');
+                        nonce = nonce.Substring(0, apostrophePos);
+                    }
+                    var doc = new HtmlDocument();
+                    doc.LoadHtml(Encoding.UTF8.GetString(session.ResponseBody));
+                    var body = doc.DocumentNode.SelectSingleNode("//body");
+                    body.InnerHtml = "<script nonce=\"" + nonce + "\">\r\n  window.watsonAssistantChatOptions = {\r\n    integrationID: \"9693c7bd-c717-4be4-8305-e0e735d16e8a\", // The ID of this integration.\r\n    region: \"eu-de\", // The region your integration is hosted in.\r\n    serviceInstanceID: \"41448759-31dd-4ac8-b39a-ed05bde7ad72\", // The ID of your service instance.\r\n    openChatByDefault: true,\r\n    onLoad: async (instance) => {\r\n      // The instance returned here has many methods on it that are documented on this page. You can assign it to any\r\n      // global window variable you like if you need to access it in other functions in your application. This instance\r\n      // is also passed as an argument to all event handlers when web chat fires an event.\r\n      window.webChatInstance = instance;\r\n      instance.updateHomeScreenConfig({\r\n  is_on: true,\r\n  greeting: 'Hi, is everything ok?',\r\n  starters: {\r\n    is_on: true,\r\n    buttons: [\r\n      {\r\n        label: 'Please, contact me with therapist'\r\n      }\r\n      \r\n    ]\r\n  }\r\n\r\n\r\n});\r\n\r\n      await instance.render();\r\n    }\r\n  };\r\n \r\n  setTimeout(function(){\r\n    const t=document.createElement('script');\r\n    t.src=\"https://web-chat.global.assistant.watson.appdomain.cloud/versions/\" + (window.watsonAssistantChatOptions.clientVersion || 'latest') + \"/WatsonAssistantChatEntry.js\";\r\n    document.head.appendChild(t);\r\n  });\r\n</script>" + body.InnerHtml;
+                    StringWriter modifiedHtmlWriter = new StringWriter();
+                    doc.DocumentNode.WriteTo(modifiedHtmlWriter, 0);
+                    string modifiedHtml = modifiedHtmlWriter.ToString();
+                    session.ResponseBody = Encoding.UTF8.GetBytes(modifiedHtml);
+                    //session.utilSetResponseBody(" <!DOCTYPE html>\r\n<html>\r\n\r\n<head>\r\n<title>Page Title</title>\r\n  <meta charset=\"UTF-8\">\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\r\n  <meta https-equiv=\"Content-Security-Policy\" content=\"script-src 'nonce-ab49Fdd' 'unsafe-inline';\" />\r\n  <title>Custom elements - IBM watsonx Assistant web chat toolkit</title>\r\n  <style>\r\n    body, html {\r\n      width: 100%;\r\n      height: 100%;\r\n      margin: 0;\r\n      padding: 0;\r\n    }\r\n\r\n    body {\r\n      overflow: hidden;\r\n    }\r\n\r\n    .WebChatContainer {\r\n      position: absolute;\r\n      width: 500px;\r\n      right: 0;\r\n      top: 16px;\r\n      bottom: 16px;\r\n    }\r\n\r\n    #WACContainer.WACContainer .WebChatStyles {\r\n      position: relative;\r\n      transition: right 500ms ease-in-out;\r\n    }\r\n\r\n    #WACContainer.WACContainer .HideWebChat {\r\n      display: none;\r\n    }\r\n\r\n    #WACContainer.WACContainer .StartOpenAnimation {\r\n      transition: none;\r\n      right: -500px;\r\n    }\r\n\r\n    #WACContainer.WACContainer .OpenAnimation {\r\n      right: 16px;\r\n    }\r\n\r\n    #WACContainer.WACContainer .CloseAnimation {\r\n      right: -500px;\r\n    }\r\n  </style>\r\n</head>\r\n<body>\r\n\r\n  <div class=\"WebChatContainer\"></div>\r\n\r\n  <script nonce=\""+nonce+"\">\r\n    const customElement = document.querySelector('.WebChatContainer');\r\n    let stylesInitialized = false;\r\n\r\n    /**\r\n     * This function is called after a view change has occurred. It will trigger the animation for the main window and\r\n     * then make the main window hidden or visible after the animation as needed.\r\n     */\r\n    function viewChangeHandler(event, instance) {\r\n      if (!stylesInitialized) {\r\n        // The first time we get this, set the styles to their initial, default state.\r\n        instance.elements.getMainWindow().addClassName('HideWebChat');\r\n        instance.elements.getMainWindow().addClassName('WebChatStyles');\r\n        stylesInitialized = true;\r\n      }\r\n\r\n      const mainWindowChanged = event.oldViewState.mainWindow !== event.newViewState.mainWindow;\r\n      if (mainWindowChanged) {\r\n        if (event.reason === 'sessionHistory') {\r\n          // If we're re-opening web chat from session history, skip the animation by leaving out \"StartOpenAnimation\".\r\n          if (event.newViewState.mainWindow) {\r\n            instance.elements.getMainWindow().addClassName('OpenAnimation');\r\n            instance.elements.getMainWindow().removeClassName('HideWebChat');\r\n          } else {\r\n            instance.elements.getMainWindow().addClassName('HideWebChat');\r\n          }\r\n        } else if (event.newViewState.mainWindow) {\r\n          // Move the main window to the off-screen position and then un-hide it.\r\n          instance.elements.getMainWindow().addClassName('StartOpenAnimation');\r\n          instance.elements.getMainWindow().removeClassName('HideWebChat');\r\n          setTimeout(() => {\r\n            // Give the browser a chance to render the off-screen state and then trigger the open animation.\r\n            instance.elements.getMainWindow().addClassName('OpenAnimation');\r\n            instance.elements.getMainWindow().removeClassName('StartOpenAnimation');\r\n          });\r\n        } else {\r\n          // Trigger the animation to slide the main window to the hidden position.\r\n          instance.elements.getMainWindow().addClassName('CloseAnimation');\r\n          instance.elements.getMainWindow().removeClassName('OpenAnimation');\r\n          setTimeout(() => {\r\n            // After the animation is complete, hide the main window.\r\n            instance.elements.getMainWindow().addClassName('HideWebChat');\r\n            instance.elements.getMainWindow().removeClassName('CloseAnimation');\r\n          }, 500);\r\n        }\r\n      }\r\n    }\r\n\r\n    /**\r\n     * This is the function that is called when the web chat code has been loaded and it is ready to be rendered.\r\n     */\r\n    async function onLoad(instance) {\r\n      // Add listeners so we know when web chat has been opened or closed.\r\n      // See https://web-chat.global.assistant.watson.cloud.ibm.com/docs.html?to=api-events#summary for more about our\r\n      // events.\r\n      instance.on({ type: 'view:change', handler: viewChangeHandler });\r\n\r\n      await instance.render();\r\n    }\r\n\r\n    // This is the standard web chat configuration object. You can modify these values with the embed code for your\r\n    // own assistant if you wish to try this example with your assistant. You can find the documentation for this at\r\n    // https://web-chat.global.assistant.watson.cloud.ibm.com/docs.html?to=api-configuration#configurationobject.\r\nwindow.watsonAssistantChatOptions = {\r\n    integrationID: \"45ed33ce-545f-44ef-b5af-4568ccaa26f6\", // The ID of this integration.\r\n    region: \"eu-de\", // The region your integration is hosted in.\r\n    serviceInstanceID: \"41448759-31dd-4ac8-b39a-ed05bde7ad72\", // The ID of your service instance.\r\n    openChatByDefault: true,\r\n    onLoad: function(instance) { instance.render(); }\r\n  };\r\n  setTimeout(function(){\r\n    const t=document.createElement('script');\r\n    t.src=\"https://web-chat.global.assistant.watson.appdomain.cloud/versions/\" + (window.watsonAssistantChatOptions.clientVersion || 'latest') + \"/WatsonAssistantChatEntry.js\";\r\n    document.head.appendChild(t);\r\n  });\r\n  </script>\r\n</body>\r\n</html> "); 
+
+                }
 
             };
 
