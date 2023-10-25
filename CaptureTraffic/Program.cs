@@ -28,6 +28,7 @@ namespace CaptureTraffic
         private static readonly ReaderWriterLockSlim sessionsLock = new ReaderWriterLockSlim();
         public static List<int> flaggedSessionIds = new List<int>();
         private static readonly string assemblyDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        private static readonly SentimentAnalyzer analyzer = new SentimentAnalyzer(@"E:\dolphin-2.1-mistral-7b.Q4_K_M.gguf");
 
         private static void Main()
         {
@@ -79,8 +80,7 @@ namespace CaptureTraffic
                     Console.WriteLine("------------------------------------------------------------------------------");
                     Console.WriteLine("Search term: " + searchTerm);
 
-                    SentimentAnalyzer sentimentAnalyzer = new SentimentAnalyzer();
-                    string sentiment = SentimentAnalyzer.SyncSentimentAnalyze(searchTerm);
+                    string sentiment = analyzer.SyncSentimentAnalyze(searchTerm);
                     Console.WriteLine("Sentiment: " + sentiment);
                     Console.WriteLine("------------------------------------------------------------------------------");
                     WriteAlert(sentiment);
